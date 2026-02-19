@@ -9,14 +9,11 @@ This is the static frontend for the Intelligence Tracker. It acts as a dashboard
    - It is a plain **Static HTML** site. No build command needed.
 
 2. **Connect to Backend**:
-   - In your backend deployment (Railway), find your **Public URL** (e.g., `https://your-app.up.railway.app`).
-   - Open `config.js` in this repo and update the `API_BASE_URL`:
+   - Update `config.js` with your deployed Backend URL:
    
    ```javascript
-   const API_BASE_URL = "https://your-app.up.railway.app";
+   const API_BASE_URL = "https://your-production-backend.up.railway.app";
    ```
-
-   *(Note: For a real production app, we would inject this at build time, but for this simple static site, editing the file is easiest.)*
 
 ## 🛠️ Local Development
 
