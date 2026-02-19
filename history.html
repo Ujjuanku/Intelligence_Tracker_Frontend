@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History - IntelliTrack</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+</head>
+
+<body>
+    <header>
+        <div class="container navbar">
+            <a href="index.html" class="brand">
+                <span>⚡</span> IntelliTrack
+            </a>
+            <nav>
+                <a href="index.html">Dashboard</a>
+                <a href="status.html">System Status</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="header-actions">
+            <div>
+                <h1 id="comp-name">Loading...</h1>
+                <p class="subtitle">History Report</p>
+            </div>
+            <a href="index.html" class="btn btn-secondary">← Back to Dashboard</a>
+        </div>
+
+        <div id="snapshot-list" class="snapshot-list">
+            <!-- Snapshots loaded here -->
+            <div class="card">
+                <p>Loading history...</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const compId = urlParams.get('id');
+
+        async function loadHistory() {
+            if (!compId) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/history/${compId}`);
+                if (!res.ok) throw new Error("Failed to load");
+                const data = await res.json();
+
+                // Set Header
+                document.getElementById('comp-name').textContent = data.competitor.name;
+
+                // Render Snapshots
+                const list = document.getElementById('snapshot-list');
+                list.innerHTML = '';
+
+                if (data.snapshots.length === 0) {
+                    list.innerHTML = `
+                    <div class="card" style="text-align: center; padding: 3rem;">
+                        <p style="color: var(--text-muted);">No checks yet.</p>
+                        <button onclick="runCheck()" class="btn btn-primary">Run First Check</button>
+                    </div>`;
+                    return;
+                }
+
+                data.snapshots.forEach((snap, index) => {
+                    // Badge Logic
+                    const linesAdded = snap.diff_json.lines_added_count || 0;
+                    const linesRemoved = snap.diff_json.lines_removed_count || 0;
+                    const totalChange = linesAdded + linesRemoved;
+
+                    let statusText = 'No Changes';
+                    let statusClass = 'change-none';
+                    let badgeClass = 'status-none';
+
+                    if (totalChange > 0 && totalChange < 10) {
+                        statusText = 'Minor Updates';
+                        statusClass = 'change-minor';
+                        badgeClass = 'status-minor';
+                    } else if (totalChange >= 10) {
+                        statusText = 'Major Updates';
+                        statusClass = 'change-major';
+                        badgeClass = 'status-major';
+                    }
+
+                    // Date formatting
+                    const date = new Date(snap.timestamp).toLocaleString();
+                    const isOpen = index === 0 ? 'open' : '';
+
+                    const html = `
+                    <div class="card snapshot-card ${statusClass}">
+                        <div class="snapshot-header" onclick="toggleSnapshot(this)">
+                            <div class="snapshot-meta">
+                                <span class="status-badge ${badgeClass}">${statusText}</span>
+                                <span class="timestamp">${date}</span>
+                            </div>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+
+                        <div class="snapshot-body ${isOpen}">
+                            <div class="insights-container" id="insights-${snap.id}"></div>
+
+                            ${totalChange > 0 ? `
+                            <div class="diff-section">
+                                <div class="diff-toggle">
+                                    <button class="btn btn-secondary btn-sm" onclick="toggleDiff(this)">Show Raw Diff (${totalChange} lines)</button>
+                                </div>
+                                <div class="raw-diff">
+                                    <div class="diff-chunk">${(snap.diff_json.added || '').split('\n').map(l => `<span class="diff-line diff-add">+ ${l}</span>`).join('')}</div>
+                                    <div class="diff-chunk">${(snap.diff_json.removed || '').split('\n').map(l => `<span class="diff-line diff-del">- ${l}</span>`).join('')}</div>
+                                </div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>`;
+
+                    list.insertAdjacentHTML('beforeend', html);
+
+                    // Render Insights
+                    if (snap.ai_summary) {
+                        renderInsights(snap.id, snap.ai_summary);
+                    }
+                });
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('snapshot-list').innerHTML = '<div class="card">Failed to load history.</div>';
+            }
+        }
+
+        function renderInsights(id, summaryJson) {
+            const container = document.getElementById(`insights-${id}`);
+            try {
+                const data = JSON.parse(summaryJson);
+                let html = '<div class="insights-grid">';
+
+                const renderCard = (title, icon, items, colorClass = '') => {
+                    if (!items || items.length === 0) return '';
+                    return `
+                    <div class="insight-card ${colorClass}">
+                        <div class="insight-title">${icon} ${title}</div>
+                        <div class="insight-content">
+                            <ul>${items.map(i => `<li>${i}</li>`).join('')}</ul>
+                        </div>
+                    </div>`;
+                };
+
+                html += renderCard('Pricing Updates', '💰', data.pricing);
+                html += renderCard('Features', '🚀', data.features);
+                html += renderCard('Positioning', '📢', data.positioning);
+
+                if (data.strategy && data.strategy.length) {
+                    html += `
+                    <div class="insight-card" style="background-color: #f3e8ff; border-color: #d8b4fe; grid-column: 1 / -1;">
+                        <div class="insight-title" style="color: #6b21a8;">🧠 Strategic Implication</div>
+                            <div class="insight-content" style="color: #4c1d95;">
+                            <p>${data.strategy.join(' ')}</p>
+                        </div>
+                    </div>`;
+                }
+                html += '</div>';
+
+                if (html === '<div class="insights-grid"></div>') {
+                    html = '<div style="text-align: center; color: var(--text-muted); margin-bottom: 1rem;"><em>No strategic changes detected via AI.</em></div>';
+                }
+
+                container.innerHTML = html;
+            } catch (e) {
+                container.innerHTML = `<div class="insight-card"><p>Summary: ${summaryJson}</p></div>`;
+            }
+        }
+
+        async function runCheck() {
+            const btn = document.querySelector('button'); // specific button
+            btn.textContent = 'Checking...';
+            await fetch(`${API_BASE_URL}/check/${compId}`, { method: 'POST' });
+            window.location.reload();
+        }
+
+        window.toggleSnapshot = function (header) {
+            const body = header.nextElementSibling;
+            body.classList.toggle('open');
+        }
+
+        window.toggleDiff = function (btn) {
+            const diff = btn.parentElement.nextElementSibling;
+            diff.classList.toggle('open');
+            btn.textContent = diff.classList.contains('open') ? 'Hide Raw Diff' : 'Show Raw Diff';
+        }
+
+        loadHistory();
+    </script>
+</body>
+
+</html>

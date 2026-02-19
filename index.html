@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Competitor Intelligence Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+</head>
+
+<body>
+    <header>
+        <div class="container navbar">
+            <a href="index.html" class="brand">
+                <span>⚡</span> IntelliTrack
+            </a>
+            <nav>
+                <a href="index.html" class="active">Dashboard</a>
+                <a href="status.html">System Status</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="header-actions">
+            <div>
+                <h1>Dashboard</h1>
+                <p class="subtitle">Track and analyze competitor pricing and product changes.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <form id="add-form" class="add-form" style="display: flex; gap: 1rem;">
+                <input type="text" id="url-input" placeholder="https://stripe.com/pricing" required>
+                <button type="submit" class="btn btn-primary">Add Competitor</button>
+            </form>
+        </div>
+
+        <div id="competitor-grid" class="grid">
+            <!-- Competitors will be loaded here -->
+            <div class="card" style="grid-column: 1/-1; text-align: center;">Loading...</div>
+        </div>
+    </main>
+
+    <script>
+        // Load Competitors
+        async function loadCompetitors() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/competitors`);
+                const competitors = await res.json();
+                const grid = document.getElementById('competitor-grid');
+                grid.innerHTML = '';
+
+                if (competitors.length === 0) {
+                    grid.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align: center;">No competitors found. Add one above!</div>';
+                    return;
+                }
+
+                competitors.forEach(comp => {
+                    const date = new Date(comp.created_at).toISOString().split('T')[0];
+                    const card = `
+                        <div class="card competitor-card">
+                            <div class="comp-header">
+                                <div class="comp-domain">${comp.name}</div>
+                                <a href="${comp.url}" target="_blank" class="comp-url">${comp.url}</a>
+                            </div>
+                            
+                            <div class="comp-stats">
+                                <span>Added ${date}</span>
+                                <span>All Checks</span>
+                            </div>
+
+                            <div class="comp-actions">
+                                <button class="btn btn-primary btn-sm" onclick="checkCompetitor(${comp.id}, this)" style="width: 100%">
+                                    <span class="btn-text">Check Now</span>
+                                </button>
+                                <a href="history.html?id=${comp.id}" class="btn btn-secondary btn-sm" style="text-align: center;">View History</a>
+                            </div>
+                        </div>
+                    `;
+                    grid.insertAdjacentHTML('beforeend', card);
+                });
+            } catch (error) {
+                console.error(error);
+                document.getElementById('competitor-grid').innerHTML = '<div class="card" style="grid-column: 1/-1; color: var(--danger);">Failed to load data. Is the backend running?</div>';
+            }
+        }
+
+        // Add Competitor
+        document.getElementById('add-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('url-input').value;
+            const btn = e.target.querySelector('button');
+            const originalText = btn.textContent;
+
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
+
+            try {
+                const formData = new FormData();
+                formData.append('url', url);
+
+                await fetch(`${API_BASE_URL}/competitors`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                document.getElementById('url-input').value = '';
+                loadCompetitors();
+            } catch (error) {
+                alert('Failed to add competitor');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
+
+        // Check Logic
+        async function checkCompetitor(id, btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Checking...';
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/check/${id}`, { method: 'POST' });
+                if (res.ok) {
+                    window.location.href = `history.html?id=${id}`;
+                } else {
+                    alert('Check failed');
+                    btn.disabled = false;
+                    btn.innerHTML = '<span class="btn-text">Check Now</span>';
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Error connecting to server');
+                btn.disabled = false;
+                btn.innerHTML = '<span class="btn-text">Check Now</span>';
+            }
+        }
+
+        loadCompetitors();
+    </script>
+</body>
+
+</html>
